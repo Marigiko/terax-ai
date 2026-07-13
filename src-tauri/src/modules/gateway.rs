@@ -225,3 +225,20 @@ pub async fn execute_mcp_tool(
 
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gateway_default_url() {
+        assert_eq!(GATEWAY_DEFAULT_URL, "http://localhost:8000");
+    }
+
+    #[test]
+    fn test_health_url_trims_slash() {
+        let url = "http://localhost:8000/";
+        let health = format!("{}/health", url.trim_end_matches('/'));
+        assert_eq!(health, "http://localhost:8000/health");
+    }
+}

@@ -61,6 +61,28 @@ pub async fn start_gateway(gateway_dir: Option<String>) -> Result<(), String> {
     Err("Gateway did not become healthy within 120 seconds".to_string())
 }
 
+/// Resolve the ai-workstation gateway directory.
+/// Priority: AI_WORKSTATION_DIR env var > ~/Projects/ai-workstation > ~/ai-workstation.
+#[command]
+pub fn get_gateway_dir() -> Option<String> {
+    if let Ok(dir) = std::env::var("AI_WORKSTATION_DIR") {
+        let path = std::path::Path::new(&dir);
+        if path.join("infrastructure/compose/docker-compose.prod.yml").exists() {
+            return Some(dir);
+        }
+    }
+    let candidates = ["Projects/ai-workstation", "ai-workstation"];
+    for rel in candidates {
+        if let Some(home) = dirs::home_dir() {
+            let p = home.join(rel);
+            if p.join("infrastructure/compose/docker-compose.prod.yml").exists() {
+                return Some(p.to_string_lossy().to_string());
+            }
+        }
+    }
+    None
+}
+
 /// Serve the built UI as a web app on the given port.
 /// This opens the dist/ folder via a minimal HTTP server.
 #[command]

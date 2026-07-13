@@ -475,6 +475,8 @@ type LocalConfig = {
   modelId: string;
   setBaseURL: (v: string) => Promise<void>;
   setModelId: (v: string) => Promise<void>;
+  autoStart?: boolean;
+  setAutoStart?: (v: boolean) => Promise<void>;
   contextLimit?: number;
   setContextLimit?: (v: number) => Promise<void>;
   noBaseURL?: boolean;
@@ -868,6 +870,8 @@ function LocalProviderCard({
     modelId,
     setBaseURL,
     setModelId,
+    autoStart,
+    setAutoStart,
     contextLimit,
     setContextLimit,
     noBaseURL,
@@ -890,8 +894,15 @@ function LocalProviderCard({
   const test = async () => {
     setTestStatus("testing");
     try {
-      const status = await invoke<number>("lm_ping", { baseUrl: urlDraft });
-      setTestStatus(status > 0 ? "ok" : "fail");
+      if (provider.id === "gateway") {
+        const health = await invoke<{ healthy: boolean; latency_ms: number }>(
+          "check_gateway_health", { url: urlDraft },
+        );
+        setTestStatus(health.healthy ? "ok" : "fail");
+      } else {
+        const status = await invoke<number>("lm_ping", { baseUrl: urlDraft });
+        setTestStatus(status > 0 ? "ok" : "fail");
+      }
     } catch {
       setTestStatus("fail");
     }
@@ -1052,6 +1063,15 @@ function LocalProviderCard({
                 </Button>
               </div>
             )}
+          </FieldRow>
+        ) : null}
+
+        {setAutoStart && provider.id === "gateway" ? (
+          <FieldRow label="Auto-start">
+            <Switch
+              checked={autoStart ?? false}
+              onCheckedChange={(checked) => void setAutoStart(checked)}
+            />
           </FieldRow>
         ) : null}
 

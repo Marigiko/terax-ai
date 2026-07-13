@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { firePendingReviewForSession } from "@/modules/agents/lib/review";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { onKeysChanged } from "@/modules/settings/store";
@@ -103,6 +104,20 @@ export function useAiBootstrap(): {
     void useAgentsStore.getState().hydrate();
     void useSnippetsStore.getState().hydrate();
   }, [hydrateSessions]);
+
+  useEffect(() => {
+    if (!gatewayAutoStart || !gatewayBaseURL.trim()) return;
+    void (async () => {
+      try {
+        const gatewayDir = await invoke<string | null>("get_gateway_dir");
+        if (gatewayDir) {
+          await invoke("start_gateway", { gatewayDir });
+        }
+      } catch (err) {
+        console.error("[ai-bootstrap] start_gateway failed:", err);
+      }
+    })();
+  }, [gatewayAutoStart, gatewayBaseURL]);
 
   return { hasComposer, keysLoaded };
 }

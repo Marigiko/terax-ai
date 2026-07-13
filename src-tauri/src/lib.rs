@@ -381,6 +381,7 @@ pub fn run() {
             gateway::list_mcp_tools,
             gateway::execute_mcp_tool,
             serve::start_gateway,
+            serve::get_gateway_dir,
             serve::serve_web,
             history::history_suggest,
             history::history_commands,
