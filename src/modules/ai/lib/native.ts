@@ -393,4 +393,7 @@ export const native = {
       line,
       workspace: currentWorkspaceEnv(),
     }),
+  // Returns SSH host aliases parsed from ~/.ssh/config. Backend handles the
+  // parsing; the frontend just receives a string array to render in dialogs.
+  sshListHosts: () => invoke<string[]>("ssh_list_hosts"),
 };

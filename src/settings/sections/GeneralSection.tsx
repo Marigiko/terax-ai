@@ -13,9 +13,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { SUPPORTED_LANGUAGES } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import type { DiffViewMode, ThemePref } from "@/modules/settings/store";
+import type { Language, ThemePref } from "@/modules/settings/store";
 import {
   setAgentNotifications,
   setAiBypassPermissions,
@@ -23,6 +24,7 @@ import {
   setDefaultWorkspaceEnv,
   setDiffViewMode,
   setExplorerGitDecorations,
+  setLanguage,
   setRestoreWindowState,
   setShowAgentsTab,
   setShowHidden,
@@ -50,6 +52,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingRow } from "../components/SettingRow";
 
@@ -78,8 +81,10 @@ const ZOOM_MAX = 2.0;
 const ZOOM_STEP = 0.05;
 
 export function GeneralSection() {
+  const { t } = useTranslation();
   const { mode, setMode } = useTheme();
 
+  const language = usePreferencesStore((s) => s.language);
   const autostart = usePreferencesStore((s) => s.autostart);
   const restoreWindowState = usePreferencesStore((s) => s.restoreWindowState);
   const showHidden = usePreferencesStore((s) => s.showHidden);
@@ -178,7 +183,31 @@ export function GeneralSection() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>Zoom</Label>
+        <Label>{t("general.language.label")}</Label>
+        <SettingRow
+          title={t("general.language.label")}
+          description={t("general.language.description")}
+        >
+          <Select
+            value={language}
+            onValueChange={(v) => void setLanguage(v as Language)}
+          >
+            <SelectTrigger value={language} className="h-8 w-40 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPORTED_LANGUAGES.map((l) => (
+                <SelectItem key={l.id} value={l.id} className="text-[12px]">
+                  {l.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>{t("general.zoom.label")}</Label>
         <div className="flex flex-col gap-3 rounded-lg border border-border/60 p-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[11.5px] text-muted-foreground">

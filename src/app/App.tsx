@@ -8,6 +8,7 @@ import { ToastEventBridge } from "./ToastEventBridge";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLaunchDir } from "@/lib/launchDir";
 import { quoteShellArg } from "@/lib/shellQuote";
+import { useAnimationScale } from "@/lib/useAnimationScale";
 import { usePresence } from "@/lib/usePresence";
 import { useZoom } from "@/lib/useZoom";
 import { isMarkdownPath } from "@/lib/utils";
@@ -46,6 +47,10 @@ import {
 import { setLspNavigator } from "@/modules/lsp";
 import type { PreviewPaneHandle } from "@/modules/preview";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
+import {
+  setSidebarDisabled,
+  setStatusBarDisabled,
+} from "@/modules/settings/store";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   type ShortcutHandlers,
@@ -102,6 +107,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
+import { MultiSshDialog } from "./components/MultiSshDialog";
 import {
   TOGGLE_BLOCK_INPUT_EVENT,
   WorkspaceInputBar,
@@ -179,6 +185,7 @@ export default function App() {
   const { zoomIn, zoomOut, zoomReset } = useZoom();
   useApplyEditorFontSize();
   useTerminalFileDrop();
+  useAnimationScale();
   const explorerRef = useRef<FileExplorerHandle>(null);
 
   // Drives session disposal off the pane tree, not React lifecycles —
@@ -318,6 +325,8 @@ export default function App() {
   );
   const miniOpen = useChatStore((s) => s.mini.open);
   const miniPresence = usePresence(miniOpen, 200);
+  const [sshPaletteOpen, setSshPaletteOpen] = useState(false);
+  const [pendingSshHost, setPendingSshHost] = useState<string | null>(null);
   const openMini = useChatStore((s) => s.openMini);
   const toggleMini = useChatStore((s) => s.toggleMini);
   const focusInput = useChatStore((s) => s.focusInput);
@@ -616,6 +625,26 @@ export default function App() {
   });
   const askPresence = usePresence(Boolean(askPopup), 120);
 
+  // When the SSH palette picks a host, queue it until the next fresh terminal
+  // leaf exists, then run `ssh <host>` in it. Mirrors the cd-in-new-tab flow.
+  useEffect(() => {
+    if (!pendingSshHost) return;
+    const id = setInterval(() => {
+      for (const t of tabsRef.current) {
+        if (t.kind !== "terminal") continue;
+        const term = terminalRefs.current.get(t.activeLeafId);
+        if (term) {
+          term.write(`ssh ${pendingSshHost}\r`);
+          term.focus();
+          setPendingSshHost(null);
+          clearInterval(id);
+          break;
+        }
+      }
+    }, 50);
+    return () => clearInterval(id);
+  }, [pendingSshHost]);
+
   const openNewTab = useCallback(() => {
     newTab(inheritedCwdForNewTab());
   }, [newTab, inheritedCwdForNewTab]);
@@ -638,6 +667,19 @@ export default function App() {
     },
     [activeLeafId],
   );
+
+  const openSsh = useCallback((host: string) => {
+    if (!host) return;
+    const tabId = newTab(home ?? undefined);
+    setTimeout(() => {
+      const tab = tabsRef.current.find((x) => x.id === tabId);
+      if (!tab || tab.kind !== "terminal") return;
+      const t = terminalRefs.current.get(tab.activeLeafId);
+      if (!t) return;
+      t.write(`ssh ${host}\r`);
+      t.focus();
+    }, 80);
+  }, [newTab, home]);
 
   const cdInNewTab = useCallback(
     (path: string) => {
@@ -729,6 +771,10 @@ export default function App() {
     (s) => s.explorerGitDecorations,
   );
   const gatewayBaseURL = usePreferencesStore((s) => s.gatewayBaseURL);
+  const commandDoneToasts = usePreferencesStore((s) => s.commandDoneToasts);
+  const sidebarDisabled = usePreferencesStore((s) => s.sidebarDisabled);
+  const statusBarDisabled = usePreferencesStore((s) => s.statusBarDisabled);
+  const sshPaletteEnabled = usePreferencesStore((s) => s.sshPaletteEnabled);
 
   const openPreviewTab = useCallback(
     (url: string) => {
@@ -842,6 +888,23 @@ export default function App() {
         editorRefs.current.get(activeId)?.triggerAiComplete(),
       "editor.codeComplete": () =>
         editorRefs.current.get(activeId)?.triggerCodeComplete(),
+      "statusbar.toggle": () => {
+        const next = !usePreferencesStore.getState().statusBarDisabled;
+        void setStatusBarDisabled(next);
+      },
+      "explorer.newFile": () => {
+        explorerRef.current?.createFile();
+      },
+      "explorer.newFolder": () => {
+        explorerRef.current?.createFolder();
+      },
+      "explorer.refresh": () => {
+        explorerRef.current?.refresh();
+      },
+      "ssh.open": () => {
+        if (!sshPaletteEnabled) return;
+        setSshPaletteOpen(true);
+      },
     }),
     [
       activeId,
@@ -872,6 +935,11 @@ export default function App() {
       activateAgentTarget,
     ],
   );
+
+  const toggleStatusBar = useCallback(() => {
+    const next = !usePreferencesStore.getState().statusBarDisabled;
+    void setStatusBarDisabled(next);
+  }, []);
 
   const shortcutsDisabled = useCallback(
     (id: ShortcutId, e: KeyboardEvent) => {
@@ -1305,9 +1373,11 @@ export default function App() {
                 id="sidebar"
                 panelRef={sidebarRef}
                 defaultSize={
-                  initialSidebarCollapsed
+                  sidebarDisabled
                     ? "0px"
-                    : `${sidebarWidthRef.current}px`
+                    : initialSidebarCollapsed
+                      ? "0px"
+                      : `${sidebarWidthRef.current}px`
                 }
                 minSize={`${SIDEBAR_MIN_WIDTH}px`}
                 maxSize={`${SIDEBAR_MAX_WIDTH}px`}
@@ -1317,6 +1387,7 @@ export default function App() {
                   if (size.inPixels > 0) persistSidebarWidth(size.inPixels);
                   persistSidebarCollapsed(size.inPixels <= 0);
                 }}
+                style={{ display: sidebarDisabled ? "none" : undefined }}
               >
                 <div className="flex h-full min-h-0 flex-col border-r border-border/60 bg-card">
                   <div
@@ -1410,7 +1481,7 @@ export default function App() {
             </ResizablePanelGroup>
           </main>
 
-          {!zenMode && (
+          {!zenMode && !statusBarDisabled && (
             <StatusBar
               cwd={activeCwd}
               filePath={activeFilePath}
@@ -1457,6 +1528,15 @@ export default function App() {
               onDismiss={() => setAskPopup(null)}
             />
           ) : null}
+
+          <MultiSshDialog
+            open={sshPaletteOpen}
+            onOpenChange={setSshPaletteOpen}
+            onSelect={(host) => {
+              setPendingSshHost(host);
+              openSsh(host);
+            }}
+          />
 
           {switcherState && (
             <TabSwitcherHud tabs={spaceTabs} state={switcherState} />

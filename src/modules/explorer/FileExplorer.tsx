@@ -49,6 +49,9 @@ export type FileExplorerHandle = {
   focus: () => void;
   isFocused: () => boolean;
   focusSearch: () => void;
+  refresh: () => void;
+  createFile: () => void;
+  createFolder: () => void;
 };
 
 type Props = {
@@ -336,8 +339,25 @@ export const FileExplorer = memo(
           setIsSearchOpen(true);
           searchRef.current?.focus();
         },
+        refresh: () => tree.refresh(rootPath),
+        createFile: () => {
+          // Surface a prompt via the existing new-file event channel so the
+          // host can wire a dialog without coupling the tree to UI state.
+          window.dispatchEvent(
+            new CustomEvent<string>("terax:explorer-create-file", {
+              detail: rootPath ?? "",
+            }),
+          );
+        },
+        createFolder: () => {
+          window.dispatchEvent(
+            new CustomEvent<string>("terax:explorer-create-folder", {
+              detail: rootPath ?? "",
+            }),
+          );
+        },
       }),
-      [entryPaths, scrollEntryIntoView, selectedPath],
+      [entryPaths, scrollEntryIntoView, selectedPath, rootPath, tree],
     );
 
     useGlobalShortcuts({

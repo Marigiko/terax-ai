@@ -1,3 +1,4 @@
+pub mod menu;
 pub mod modules;
 
 use modules::{
@@ -19,6 +20,16 @@ fn get_launch_dir(state: State<'_, LaunchDir>) -> Option<String> {
     state.0.lock().expect("LaunchDir mutex poisoned").take()
 }
 
+/// Pending settings tab requested via CLI before the settings window existed.
+/// `settings_take_pending_tab` drains it so the opened window can navigate.
+#[derive(Default)]
+struct SettingsPendingTab(Mutex<Option<String>>);
+
+#[tauri::command]
+fn settings_take_pending_tab(state: State<'_, SettingsPendingTab>) -> Option<String> {
+    state.0.lock().expect("SettingsPendingTab mutex poisoned").take()
+}
+
 fn parse_launch_dir() -> Option<String> {
     for arg in std::env::args().skip(1) {
         if arg.starts_with('-') {
@@ -36,7 +47,18 @@ fn parse_launch_dir() -> Option<String> {
 }
 
 #[tauri::command]
-async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Result<(), String> {
+async fn open_settings_window(
+    app: tauri::AppHandle,
+    tab: Option<String>,
+    pending: State<'_, SettingsPendingTab>,
+) -> Result<(), String> {
+    let tab = tab.or_else(|| {
+        pending
+            .0
+            .lock()
+            .expect("SettingsPendingTab mutex poisoned")
+            .take()
+    });
     let url_path = match tab.as_deref() {
         Some(t) if !t.is_empty() => format!("settings.html?tab={}", t),
         _ => "settings.html".to_string(),
@@ -93,6 +115,20 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
         let _ = window.set_decorations(false);
     }
 
+    // Hide-on-close instead of destroy so reopening is instant (the webview
+    // stays alive, no flash of rebuilding). Re-shown from open_settings_window.
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::CloseRequested { .. }) {
+            if let Some(w) = handle.get_webview_window("settings") {
+                let _ = w.hide();
+            }
+        }
+    });
+
+    // Center the settings window over the main window. macOS uses logical
+    // (point) coordinates from the underlying window; outer_position/size are
+    // in physical pixels on Retina, so scale to logical for set_position.
     #[cfg(target_os = "macos")]
     if let Some(main) = app.get_webview_window("main") {
         if let (Ok(main_pos), Ok(main_size), Ok(settings_size)) = (
@@ -100,10 +136,16 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
             main.outer_size(),
             window.outer_size(),
         ) {
-            let x = main_pos.x
-                + ((main_size.width as i32).saturating_sub(settings_size.width as i32)) / 2;
-            let y = main_pos.y
-                + ((main_size.height as i32).saturating_sub(settings_size.height as i32)) / 2;
+            let scale = main.scale_factor().unwrap_or(1.0);
+            let sp = window.scale_factor().unwrap_or(1.0);
+            let main_x = main_pos.x as f64 / scale;
+            let main_y = main_pos.y as f64 / scale;
+            let main_w = main_size.width as f64 / scale;
+            let main_h = main_size.height as f64 / scale;
+            let set_w = settings_size.width as f64 / sp;
+            let set_h = settings_size.height as f64 / sp;
+            let x = ((main_x + (main_w - set_w) / 2.0) * sp).round() as i32;
+            let y = ((main_y + (main_h - set_h) / 2.0) * sp).round() as i32;
             let _ = window.set_position(PhysicalPosition::new(x, y));
         } else {
             let _ = window.center();
@@ -158,6 +200,12 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .setup(|_app| {
+            // Localized native menu bar, built from the persisted `language`
+            // preference. No-op off macOS.
+            #[cfg(target_os = "macos")]
+            {
+                let _ = menu::build_menu(_app.handle());
+            }
             voice::install_fn_monitor(_app.handle());
 
             // macOS skips parent() for the settings window, so tie its lifecycle
@@ -176,6 +224,51 @@ pub fn run() {
                     }
                 });
             }
+
+            // macOS titlebar toolbar: adds a	settings ⚙️ button to the main
+            // window's toolbar so users can open settings without the menu bar.
+            #[cfg(target_os = "macos")]
+            menu::install_titlebar_toolbar(_app.handle());
+
+            // When the main window gains focus, re-assert the settings window's
+            // always-on-top so it doesn't get stranded behind it after a alt-tab
+            // or dock click.
+            #[cfg(target_os = "macos")]
+            if let Some(main) = _app.get_webview_window("main") {
+                let handle = _app.handle().clone();
+                main.on_window_event(move |event| {
+                    if matches!(event, WindowEvent::Focused(true)) {
+                        if let Some(settings) = handle.get_webview_window("settings") {
+                            let _ = settings.set_always_on_top(true);
+                        }
+                    }
+                });
+            }
+
+            // Pre-warm the settings window hidden after startup so the first
+            // "Open Settings" click is instant (webview already loaded).
+            #[cfg(target_os = "macos")]
+            {
+                let handle = _app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    let _ = WebviewWindowBuilder::new(
+                        &handle,
+                        "settings",
+                        WebviewUrl::App("settings.html".into()),
+                    )
+                    .title("Settings")
+                    .inner_size(900.0, 700.0)
+                    .min_inner_size(820.0, 620.0)
+                    .resizable(true)
+                    .visible(false)
+                    .always_on_top(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true)
+                    .build();
+                });
+            }
+
             Ok(())
         })
         .manage(pty::PtyState::default())
@@ -195,6 +288,7 @@ pub fn run() {
             registry
         })
         .manage(LaunchDir(Mutex::new(cli_dir)))
+        .manage(SettingsPendingTab(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             pty::pty_open,
             pty::pty_write,
@@ -265,6 +359,7 @@ pub fn run() {
             workspace::workspace_current_dir,
             get_launch_dir,
             open_settings_window,
+            settings_take_pending_tab,
             agent::agent_enable_hooks,
             agent::agent_disable_hooks,
             claude_code::cli_agent_run,
@@ -294,6 +389,7 @@ pub fn run() {
             history::history_list_full,
             history::history_clear,
             history::history_delete,
+            menu::apply_menu_language,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

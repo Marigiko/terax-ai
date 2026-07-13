@@ -122,6 +122,9 @@ export const EDITOR_THEME_LABELS: Record<EditorThemeId, string> = {
 
 export type DiffViewMode = "inline" | "split";
 
+/** UI language. Extend this union (and the locale resources) to add languages. */
+export type Language = "en" | "zh-CN";
+
 export type TerminalCursorStyle = "bar" | "block" | "underline";
 
 export const TERMINAL_CURSOR_STYLES: { value: TerminalCursorStyle; label: string }[] = [
@@ -140,6 +143,7 @@ export type VoiceHoldMods = {
 export type Preferences = {
   theme: ThemePref;
   themeId: string;
+  language: Language;
   backgroundKind: BackgroundKind;
   backgroundImageId: string | null;
   backgroundOpacity: number;
@@ -212,6 +216,16 @@ export type Preferences = {
   editorCustomFormatCommand: string;
   lspActivation: Record<string, LspActivation>;
   lspCustomServers: LspCustomServer[];
+  /** Animation speed multiplier: 0 = instant, 1 = normal, 2 = slow-mo. */
+  animationScale: number;
+  /** Show a toast when an AI tool/shell command finishes (OSC 133 hook). */
+  commandDoneToasts: boolean;
+  /** Surface SSH hosts from ~/.ssh/config in the command palette/jump menu. */
+  sshPaletteEnabled: boolean;
+  /** Sidebar can be force-hidden by the shell tool chrome mode. */
+  sidebarDisabled: boolean;
+  /** Status bar can be force-hidden by the shell tool chrome mode. */
+  statusBarDisabled: boolean;
 };
 
 export type EditorFormatter =
@@ -241,6 +255,7 @@ export type LspCustomServer = {
 const STORE_PATH = "terax-settings.json";
 const KEY_THEME = "theme";
 const KEY_THEME_ID = "themeId";
+const KEY_LANGUAGE = "language";
 const KEY_BG_KIND = "backgroundKind";
 const KEY_BG_IMAGE_ID = "backgroundImageId";
 const KEY_BG_OPACITY = "backgroundOpacity";
@@ -314,6 +329,11 @@ const KEY_EDITOR_FORMATTER_BY_LANG = "editorFormatterByLang";
 const KEY_EDITOR_CUSTOM_FORMAT_COMMAND = "editorCustomFormatCommand";
 const KEY_LSP_ACTIVATION = "lspActivation";
 const KEY_LSP_CUSTOM_SERVERS = "lspCustomServers";
+const KEY_ANIMATION_SCALE = "animationScale";
+const KEY_COMMAND_DONE_TOASTS = "commandDoneToasts";
+const KEY_SSH_PALETTE_ENABLED = "sshPaletteEnabled";
+const KEY_SIDEBAR_DISABLED = "sidebarDisabled";
+const KEY_STATUSBAR_DISABLED = "statusBarDisabled";
 
 export const TERMINAL_FONT_SIZE_DEFAULT = 14;
 export const TERMINAL_FONT_SIZE_MIN = 8;
@@ -340,6 +360,7 @@ export const TERMINAL_SCROLLBACK_PRESETS = [
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: "system",
   themeId: DEFAULT_THEME_ID,
+  language: "en",
   backgroundKind: "none",
   backgroundImageId: null,
   backgroundOpacity: 0.5,
@@ -410,6 +431,11 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorCustomFormatCommand: "",
   lspActivation: {},
   lspCustomServers: [],
+  animationScale: 1,
+  commandDoneToasts: true,
+  sshPaletteEnabled: true,
+  sidebarDisabled: false,
+  statusBarDisabled: false,
 };
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
@@ -452,6 +478,7 @@ export async function loadPreferences(): Promise<Preferences> {
   return {
     theme: get<ThemePref>(KEY_THEME) ?? DEFAULT_PREFERENCES.theme,
     themeId: get<string>(KEY_THEME_ID) ?? DEFAULT_PREFERENCES.themeId,
+    language: get<Language>(KEY_LANGUAGE) ?? DEFAULT_PREFERENCES.language,
     backgroundKind:
       get<BackgroundKind>(KEY_BG_KIND) ?? DEFAULT_PREFERENCES.backgroundKind,
     backgroundImageId:
@@ -659,6 +686,19 @@ export async function loadPreferences(): Promise<Preferences> {
     lspCustomServers:
       get<LspCustomServer[]>(KEY_LSP_CUSTOM_SERVERS) ??
       DEFAULT_PREFERENCES.lspCustomServers,
+    animationScale:
+      get<number>(KEY_ANIMATION_SCALE) ?? DEFAULT_PREFERENCES.animationScale,
+    commandDoneToasts:
+      get<boolean>(KEY_COMMAND_DONE_TOASTS) ??
+      DEFAULT_PREFERENCES.commandDoneToasts,
+    sshPaletteEnabled:
+      get<boolean>(KEY_SSH_PALETTE_ENABLED) ??
+      DEFAULT_PREFERENCES.sshPaletteEnabled,
+    sidebarDisabled:
+      get<boolean>(KEY_SIDEBAR_DISABLED) ?? DEFAULT_PREFERENCES.sidebarDisabled,
+    statusBarDisabled:
+      get<boolean>(KEY_STATUSBAR_DISABLED) ??
+      DEFAULT_PREFERENCES.statusBarDisabled,
   };
 }
 
@@ -687,6 +727,10 @@ export async function setTheme(value: ThemePref): Promise<void> {
 
 export async function setThemeId(value: string): Promise<void> {
   await writePref(KEY_THEME_ID, value);
+}
+
+export async function setLanguage(value: Language): Promise<void> {
+  await writePref(KEY_LANGUAGE, value);
 }
 
 /** Slider stores 0..1. Actual rendered opacity is halved in SurfaceLayer
@@ -1050,6 +1094,29 @@ export async function setShortcuts(
   await writePref(KEY_SHORTCUTS, value);
 }
 
+export async function setAnimationScale(value: number): Promise<void> {
+  const clamped = Number.isFinite(value)
+    ? Math.min(2, Math.max(0, Math.round(value * 100) / 100))
+    : 1;
+  await writePref(KEY_ANIMATION_SCALE, clamped);
+}
+
+export async function setCommandDoneToasts(value: boolean): Promise<void> {
+  await writePref(KEY_COMMAND_DONE_TOASTS, value);
+}
+
+export async function setSshPaletteEnabled(value: boolean): Promise<void> {
+  await writePref(KEY_SSH_PALETTE_ENABLED, value);
+}
+
+export async function setSidebarDisabled(value: boolean): Promise<void> {
+  await writePref(KEY_SIDEBAR_DISABLED, value);
+}
+
+export async function setStatusBarDisabled(value: boolean): Promise<void> {
+  await writePref(KEY_STATUSBAR_DISABLED, value);
+}
+
 export async function resetShortcuts(): Promise<void> {
   await writePref(KEY_SHORTCUTS, DEFAULT_PREFERENCES.shortcuts);
 }
@@ -1063,6 +1130,7 @@ export async function onPreferencesChange(
   const map: Record<string, PrefKey> = {
     [KEY_THEME]: "theme",
     [KEY_THEME_ID]: "themeId",
+    [KEY_LANGUAGE]: "language",
     [KEY_BG_KIND]: "backgroundKind",
     [KEY_BG_IMAGE_ID]: "backgroundImageId",
     [KEY_BG_OPACITY]: "backgroundOpacity",
@@ -1133,6 +1201,11 @@ export async function onPreferencesChange(
     [KEY_EDITOR_CUSTOM_FORMAT_COMMAND]: "editorCustomFormatCommand",
     [KEY_LSP_ACTIVATION]: "lspActivation",
     [KEY_LSP_CUSTOM_SERVERS]: "lspCustomServers",
+    [KEY_ANIMATION_SCALE]: "animationScale",
+    [KEY_COMMAND_DONE_TOASTS]: "commandDoneToasts",
+    [KEY_SSH_PALETTE_ENABLED]: "sshPaletteEnabled",
+    [KEY_SIDEBAR_DISABLED]: "sidebarDisabled",
+    [KEY_STATUSBAR_DISABLED]: "statusBarDisabled",
   };
   // Same-process writes still fire onChange immediately; cross-window writes
   // arrive via the Tauri event emitted by writePref().

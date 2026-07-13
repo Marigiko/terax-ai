@@ -49,7 +49,11 @@ export type ShortcutId =
   | "editor.undo"
   | "editor.redo"
   | "editor.aiComplete"
-  | "editor.codeComplete";
+  | "editor.codeComplete"
+  | "statusbar.toggle"
+  | "explorer.newFile"
+  | "explorer.newFolder"
+  | "explorer.refresh";
 
 export type ShortcutGroup =
   | "General"
@@ -376,6 +380,30 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Trigger code completion",
     group: "Editor",
     defaultBindings: [{ ctrl: true, key: " " }],
+  },
+  {
+    id: "statusbar.toggle",
+    label: "Toggle status bar",
+    group: "View",
+    defaultBindings: [],
+  },
+  {
+    id: "explorer.newFile",
+    label: "New file in workspace",
+    group: "General",
+    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "n" }],
+  },
+  {
+    id: "explorer.newFolder",
+    label: "New folder in workspace",
+    group: "General",
+    defaultBindings: [{ [MOD_PROP]: true, alt: true, shift: true, key: "n" }],
+  },
+  {
+    id: "explorer.refresh",
+    label: "Refresh file explorer",
+    group: "General",
+    defaultBindings: [],
   },
 ];
 
