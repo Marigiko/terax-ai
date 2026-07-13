@@ -1,3 +1,5 @@
+import { usePreferencesStore } from "@/modules/settings/preferences";
+
 export type ToolContext = {
   /** Active terminal tab cwd, used to resolve relative paths. Null = home. */
   getCwd: () => string | null;
@@ -31,4 +33,8 @@ export function resolvePath(rawPath: string, cwd: string | null): string {
     );
   const sep = cwd.includes("\\") && !cwd.includes("/") ? "\\" : "/";
   return cwd.endsWith(sep) ? `${cwd}${rawPath}` : `${cwd}${sep}${rawPath}`;
+}
+
+export function gateApproval(): boolean {
+  return !usePreferencesStore.getState().aiBypassPermissions;
 }

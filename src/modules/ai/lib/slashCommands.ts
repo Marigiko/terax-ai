@@ -2,8 +2,11 @@ import {
   CheckListIcon,
   ClaudeIcon,
   SparklesIcon,
+  TerminalSquareIcon,
 } from "@hugeicons/core-free-icons";
 import { usePlanStore } from "../store/planStore";
+import { executeGatewayTool } from "./mcp";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 
 /**
  * Outcome of intercepting a slash command from the composer.
@@ -67,6 +70,12 @@ export const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
     label: "Delegate to Claude Code",
     icon: ClaudeIcon,
   },
+  mcp: {
+    name: "mcp",
+    invocation: "/mcp",
+    label: "Run Gateway Tool",
+    icon: TerminalSquareIcon,
+  },
 };
 
 export const TERAX_CMD_RE =
@@ -114,6 +123,47 @@ export function tryRunSlashCommand(input: string): SlashOutcome {
         prompt: claudeCodeDirective(tail),
         commandName: "claude-code",
       };
+    }
+    case "mcp": {
+      if (!tail) {
+        return { kind: "handled", toast: "Usage: /mcp <tool> [json-input]" };
+      }
+      const gatewayUrl = usePreferencesStore.getState().gatewayBaseURL;
+      const parts = tail.split(/\s+/);
+      const toolName = parts[0];
+      const inputStr = parts.slice(1).join(" ");
+      const input: Record<string, unknown> = (() => {
+        try {
+          return inputStr ? JSON.parse(inputStr) : {};
+        } catch {
+          return { query: inputStr };
+        }
+      })();
+
+      // Fire and forget — result shows as toast
+      void executeGatewayTool(toolName, input, gatewayUrl)
+        .then((result) => {
+          const summary =
+            typeof result === "string"
+              ? result
+              : JSON.stringify(result, null, 2);
+          usePlanStore.getState();
+          // Use custom event to show toast
+          window.dispatchEvent(
+            new CustomEvent("terax:toast", {
+              detail: { message: `MCP ${toolName}: ${summary.slice(0, 200)}` },
+            }),
+          );
+        })
+        .catch((err) => {
+          window.dispatchEvent(
+            new CustomEvent("terax:toast", {
+              detail: { message: `MCP ${toolName} failed: ${String(err).slice(0, 200)}`, variant: "error" },
+            }),
+          );
+        });
+
+      return { kind: "handled", toast: `Running MCP tool: ${toolName}…` };
     }
     default:
       return { kind: "none" };

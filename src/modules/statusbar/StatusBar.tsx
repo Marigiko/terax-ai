@@ -5,11 +5,13 @@ import {
 } from "@/components/ui/tooltip";
 import { useChatStore } from "@/modules/ai";
 import { AgentStatusPill } from "@/modules/ai/components/AgentStatusPill";
+import { GatewayStatusPill } from "./GatewayStatusPill";
 import {
   AiOpenButton,
   AiStatusBarControls,
 } from "@/modules/ai/components/AiStatusBarControls";
 import { LspStatusPill } from "@/modules/lsp";
+import type { GitBlameLineInfo } from "@/modules/ai/lib/native";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { IncognitoIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -27,6 +29,8 @@ type Props = {
   /** Only rendered when the AI panel is open and a key is loaded. */
   hasComposer: boolean;
   privateActive: boolean;
+  gatewayUrl?: string;
+  blameInfo?: GitBlameLineInfo | null;
 };
 
 export function StatusBar({
@@ -38,6 +42,8 @@ export function StatusBar({
   onOpenMini,
   hasComposer,
   privateActive,
+  gatewayUrl,
+  blameInfo,
 }: Props) {
   const panelOpen = useChatStore((s) => s.panelOpen);
   const openPanel = useChatStore((s) => s.openPanel);
@@ -66,8 +72,14 @@ export function StatusBar({
             </TooltipContent>
           </Tooltip>
         ) : null}
+        {gatewayUrl ? <GatewayStatusPill url={gatewayUrl} /> : null}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
+        {blameInfo && (
+          <span className="shrink-0 text-[10.5px] text-muted-foreground/70">
+            {blameInfo.author} ({formatRelativeTime(blameInfo.timestamp)})
+          </span>
+        )}
         <AgentStatusPill onClick={onOpenMini} />
         {panelOpen && hasComposer ? (
           <AiStatusBarControls />
@@ -77,4 +89,27 @@ export function StatusBar({
       </div>
     </footer>
   );
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const diff = Math.floor(Date.now() / 1000) - timestamp;
+  if (diff < 60) return "just now";
+  if (diff < 3600) {
+    const m = Math.floor(diff / 60);
+    return `${m} ${m === 1 ? "minute" : "minutes"} ago`;
+  }
+  if (diff < 86400) {
+    const h = Math.floor(diff / 3600);
+    return `${h} ${h === 1 ? "hour" : "hours"} ago`;
+  }
+  if (diff < 2592000) {
+    const d = Math.floor(diff / 86400);
+    return `${d} ${d === 1 ? "day" : "days"} ago`;
+  }
+  if (diff < 31536000) {
+    const mo = Math.floor(diff / 2592000);
+    return `${mo} ${mo === 1 ? "month" : "months"} ago`;
+  }
+  const y = Math.floor(diff / 31536000);
+  return `${y} ${y === 1 ? "year" : "years"} ago`;
 }

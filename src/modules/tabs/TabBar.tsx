@@ -43,12 +43,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { AgentIcon } from "@/modules/agents/lib/agentIcon";
 import { labelFor } from "./lib/tabLabel";
 import type { EditorTab, Tab } from "./lib/useTabs";
 
 type Props = {
   tabs: Tab[];
   activeId: number;
+  agentsByTabId?: Map<number, string>;
   onSelect: (id: number) => void;
   onNew: () => void;
   onNewBlock: () => void;
@@ -82,6 +84,7 @@ export function TabBar({
   onRename,
   onReorder,
   onOverrideLanguage,
+  agentsByTabId,
   compact,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -247,7 +250,7 @@ export function TabBar({
                         compact ? "px-1.5" : "px-2",
                       )}
                     >
-                      <TabIcon tab={t} />
+                      <TabIcon tab={t} agentsByTabId={agentsByTabId} />
                       <TabRenameInput
                         initial={labelFor(t)}
                         onCommit={(value) => {
@@ -359,7 +362,7 @@ export function TabBar({
                             data-no-drag
                             className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/30 hover:shadow-[0_0_4px_var(--color-popover-foreground)]"
                           >
-                            <TabIcon tab={t} />
+                            <TabIcon tab={t} agentsByTabId={agentsByTabId} />
                           </span>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -440,7 +443,7 @@ export function TabBar({
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : (
-                      <TabIcon tab={t} />
+                      <TabIcon tab={t} agentsByTabId={agentsByTabId} />
                     )}
                     {/* Preview tabs use italic to signal the transient state,
                         matching the visual convention from VSCode. */}
@@ -619,7 +622,17 @@ function DropIndicator() {
   );
 }
 
-export function TabIcon({ tab }: { tab: Tab }) {
+export function TabIcon({
+  tab,
+  agentsByTabId,
+}: {
+  tab: Tab;
+  agentsByTabId?: Map<number, string>;
+}) {
+  const agent = tab.kind === "terminal" ? agentsByTabId?.get(tab.id) : undefined;
+  if (agent) {
+    return <AgentIcon agent={agent} size={14} className="shrink-0" />;
+  }
   if (tab.kind === "editor" || tab.kind === "markdown") {
     const url =
       tab.kind === "editor" && tab.overrideLanguage

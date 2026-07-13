@@ -9,11 +9,13 @@ export type ProviderId =
   | "groq"
   | "deepseek"
   | "mistral"
+  | "minimax"
   | "openrouter"
   | "openai-compatible"
   | "lmstudio"
   | "mlx"
-  | "ollama";
+  | "ollama"
+  | "gateway";
 
 export type ProviderInfo = {
   id: ProviderId;
@@ -83,6 +85,13 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     consoleUrl: "https://console.mistral.ai/api-keys/",
   },
   {
+    id: "minimax",
+    label: "MiniMax",
+    keyringAccount: "minimax-api-key",
+    keyPrefix: null,
+    consoleUrl: "https://platform.minimax.io/",
+  },
+  {
     id: "openrouter",
     label: "OpenRouter",
     keyringAccount: "openrouter-api-key",
@@ -118,7 +127,18 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     keyPrefix: null,
     consoleUrl: "https://ollama.com/download",
   },
+  {
+    id: "gateway",
+    label: "AI Workstation Gateway",
+    keyringAccount: "",
+    keyPrefix: null,
+    consoleUrl: "https://github.com/keyz/ai-workstation",
+    keyOptional: true,
+  },
 ] as const;
+
+export const GATEWAY_DEFAULT_URL = "http://localhost:8000";
+export const GATEWAY_PROVIDER_ID = "gateway" as const;
 
 export type CustomEndpoint = {
   id: string;
@@ -523,6 +543,35 @@ export const MODELS = [
     tags: ["coding"],
   },
 
+  // ── MiniMax ──────────────────────────────────────────────────────────────
+  {
+    id: "MiniMax-M3",
+    provider: "minimax",
+    label: "MiniMax M3",
+    hint: "Best",
+    description: "512K context, 128K output, image input.",
+    capabilities: { intelligence: 5, speed: 3, cost: 4 },
+    tags: ["vision", "tools", "coding"],
+  },
+  {
+    id: "MiniMax-M2.7",
+    provider: "minimax",
+    label: "MiniMax M2.7",
+    hint: "Legacy",
+    description: "Previous-generation MiniMax.",
+    capabilities: { intelligence: 5, speed: 3, cost: 5 },
+    tags: ["tools", "coding"],
+  },
+  {
+    id: "MiniMax-M2.7-highspeed",
+    provider: "minimax",
+    label: "MiniMax M2.7 Highspeed",
+    hint: "Fast",
+    description: "Previous-generation low-latency variant.",
+    capabilities: { intelligence: 5, speed: 4, cost: 4 },
+    tags: ["tools", "coding"],
+  },
+
   // ── Cerebras (autocomplete-tier) ──────────────────────────────────────────
   {
     id: "gpt-oss-120b",
@@ -630,6 +679,44 @@ export const MODELS = [
     description: "Local models via Ollama.",
     capabilities: { intelligence: 3, speed: 3, cost: 5 },
   },
+
+  // ── AI Workstation Gateway ────────────────────────────────────────────────
+  {
+    id: "gateway-auto",
+    provider: "gateway",
+    label: "Gateway (auto)",
+    hint: "Smart",
+    description: "AI Workstation Gateway with model routing.",
+    capabilities: { intelligence: 4, speed: 4, cost: 4 },
+    tags: ["tools", "coding"],
+  },
+  {
+    id: "gateway/sonnet",
+    provider: "gateway",
+    label: "Gateway — Sonnet",
+    hint: "Balanced",
+    description: "Claude Sonnet via AI Workstation Gateway.",
+    capabilities: { intelligence: 5, speed: 4, cost: 3 },
+    tags: ["tools", "coding"],
+  },
+  {
+    id: "gateway/gpt-4o",
+    provider: "gateway",
+    label: "Gateway — GPT-4o",
+    hint: "Versatile",
+    description: "GPT-4o via AI Workstation Gateway.",
+    capabilities: { intelligence: 5, speed: 3, cost: 2 },
+    tags: ["vision", "tools", "coding"],
+  },
+  {
+    id: "gateway/gemini",
+    provider: "gateway",
+    label: "Gateway — Gemini",
+    hint: "Fast",
+    description: "Gemini via AI Workstation Gateway.",
+    capabilities: { intelligence: 4, speed: 5, cost: 5 },
+    tags: ["vision", "tools"],
+  },
 ] as const satisfies readonly ModelInfo[];
 
 export type ModelId = (typeof MODELS)[number]["id"];
@@ -679,6 +766,7 @@ const FREEFORM_PROVIDERS: ReadonlySet<ProviderId> = new Set([
   "lmstudio",
   "mlx",
   "ollama",
+  "gateway",
 ]);
 
 // Reasoning models reject tool-call turns whose reasoning was stripped; keep it.
@@ -750,6 +838,9 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "deepseek-v4-pro": 1_000_000,
   "deepseek-v4-flash": 1_000_000,
   "deepseek-reasoner": 128_000,
+  "MiniMax-M3": 512_000,
+  "MiniMax-M2.7": 204_800,
+  "MiniMax-M2.7-highspeed": 204_800,
   "gpt-oss-120b": 128_000,
   "llama3.3-70b": 128_000,
   "qwen-3-32b": 32_000,
@@ -815,6 +906,9 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   "deepseek-v4-pro": { input: 0.28, output: 1.1, cacheRead: 0.028 },
   "deepseek-v4-flash": { input: 0.07, output: 0.27, cacheRead: 0.007 },
   "deepseek-reasoner": { input: 0.55, output: 2.19, cacheRead: 0.14 },
+  "MiniMax-M3": { input: 0.6, output: 2.4, cacheRead: 0.12 },
+  "MiniMax-M2.7": { input: 0.3, output: 1.2, cacheRead: 0.06 },
+  "MiniMax-M2.7-highspeed": { input: 0.6, output: 2.4, cacheRead: 0.06 },
 };
 
 export function estimateCost(
@@ -844,6 +938,7 @@ export const KEYLESS_PROVIDERS: readonly ProviderId[] = [
   "mlx",
   "ollama",
   "openai-compatible",
+  "gateway",
 ] as const;
 
 export function providerNeedsKey(id: ProviderId): boolean {
@@ -872,8 +967,10 @@ export const DEFAULT_AUTOCOMPLETE_MODEL: Partial<Record<ProviderId, string>> = {
   google: "gemini-2.5-flash",
   xai: "grok-4.3",
   deepseek: "deepseek-v4-flash",
+  minimax: "MiniMax-M2.7-highspeed",
   openrouter: "openai/gpt-5.4-mini",
   "openai-compatible": "",
+  gateway: "gateway/sonnet",
 };
 
 /** Curated list of fast models suitable for inline completion (speed ≥ 4). */

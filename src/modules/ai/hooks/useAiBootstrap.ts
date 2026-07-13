@@ -44,6 +44,9 @@ export function useAiBootstrap(): {
   const openaiCompatibleBaseURL = usePreferencesStore(
     (s) => s.openaiCompatibleBaseURL,
   );
+  const gatewayBaseURL = usePreferencesStore((s) => s.gatewayBaseURL);
+  const gatewayAutoStart = usePreferencesStore((s) => s.gatewayAutoStart);
+  const gatewayModelId = usePreferencesStore((s) => s.gatewayModelId);
   const customEndpoints = usePreferencesStore((s) => s.customEndpoints);
   const hasLocalModel =
     (lmstudioBaseURL.trim().length > 0 && lmstudioModelId.trim().length > 0) ||
@@ -51,6 +54,7 @@ export function useAiBootstrap(): {
     (ollamaBaseURL.trim().length > 0 && ollamaModelId.trim().length > 0) ||
     (openaiCompatibleBaseURL.trim().length > 0 &&
       openaiCompatibleModelId.trim().length > 0) ||
+    gatewayBaseURL.trim().length > 0 ||
     customEndpoints.some(
       (e) => e.baseURL.trim().length > 0 && e.modelId.trim().length > 0,
     );

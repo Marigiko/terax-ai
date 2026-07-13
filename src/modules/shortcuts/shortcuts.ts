@@ -26,6 +26,10 @@ export type ShortcutId =
   | "pane.source"
   | "terminal.clear"
   | "terminal.toggleInput"
+  | "terminalComposer.toggle"
+  | "terminalComposer.send"
+  | "terminalComposer.queue"
+  | "terminalComposer.sendQueued"
   | "blocks.prev"
   | "blocks.next"
   | "search.focus"
@@ -41,6 +45,7 @@ export type ShortcutId =
   | "agent.focusAttention"
   | "settings.open"
   | "sidebar.toggle"
+  | "sidebar.files"
   | "editor.undo"
   | "editor.redo"
   | "editor.aiComplete"
@@ -52,6 +57,7 @@ export type ShortcutGroup =
   | "Spaces"
   | "Panes"
   | "Terminal"
+  | "Composer"
   | "Search"
   | "AI"
   | "View"
@@ -175,6 +181,30 @@ export const SHORTCUTS: Shortcut[] = [
     defaultBindings: [{ [MOD_PROP]: true, key: "u" }],
   },
   {
+    id: "terminalComposer.toggle",
+    label: "Toggle terminal composer",
+    group: "Composer",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "e" }],
+  },
+  {
+    id: "terminalComposer.send",
+    label: "Send composer draft",
+    group: "Composer",
+    defaultBindings: [{ [MOD_PROP]: true, key: "Enter" }],
+  },
+  {
+    id: "terminalComposer.queue",
+    label: "Queue composer draft",
+    group: "Composer",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "Enter" }],
+  },
+  {
+    id: "terminalComposer.sendQueued",
+    label: "Send next queued terminal prompt",
+    group: "Composer",
+    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "Enter" }],
+  },
+  {
     id: "blocks.prev",
     label: "Previous command block",
     group: "Terminal",
@@ -263,6 +293,12 @@ export const SHORTCUTS: Shortcut[] = [
     defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "a" }],
   },
   {
+    id: "sidebar.files",
+    label: "Show Files sidebar",
+    group: "View",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "g" }],
+  },
+  {
     id: "sidebar.toggle",
     label: "Toggle file explorer",
     group: "View",
@@ -348,6 +384,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   "Tabs",
   "Panes",
   "Terminal",
+  "Composer",
   "View",
   "Search",
   "AI",

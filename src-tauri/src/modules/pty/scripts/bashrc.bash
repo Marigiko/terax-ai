@@ -48,7 +48,7 @@ if [ -z "$__TERAX_HOOKS_LOADED" ]; then
         PS1='\n\[\e]133;B\e\\\]'
       fi
     elif [ -z "$__TERAX_PS1_INJECTED" ]; then
-      PS1='\[\e]133;B\e\\\]'"$PS1"
+      PS1="$PS1"'\[\e]133;B\e\\\]'
       __TERAX_PS1_INJECTED=1
     fi
     printf '\e]133;A\e\\'

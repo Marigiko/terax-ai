@@ -179,7 +179,7 @@ function termOptions() {
     fontSize: Math.max(4, Math.round(prefs.terminalFontSize * prefs.zoomLevel)),
     theme: buildTerminalTheme(),
     cursorBlink: false,
-    cursorStyle: "bar" as const,
+    cursorStyle: prefs.terminalCursorStyle,
     cursorInactiveStyle: "outline" as const,
     scrollback: prefs.terminalScrollback,
     allowProposedApi: true,
@@ -775,7 +775,9 @@ function attachWebgl(slot: Slot): void {
     elem.querySelectorAll<HTMLCanvasElement>("canvas"),
   );
   try {
-    const webgl = new WebglAddon();
+    // preserveDrawingBuffer: true forces single-buffering so draw calls
+    // are visible in the same frame, eliminating WebGL's default 1-frame lag.
+    const webgl = new WebglAddon(true);
     webgl.onContextLoss(() => {
       const cur = slot.webglAddon;
       if (cur === webgl) {
@@ -932,6 +934,13 @@ export function applyScrollback(value: number): void {
   for (const slot of slots) {
     if (slot.term.options.scrollback === value) continue;
     slot.term.options.scrollback = value;
+  }
+}
+
+export function applyCursorStyle(style: "bar" | "block" | "underline"): void {
+  for (const slot of slots) {
+    if (slot.term.options.cursorStyle === style) continue;
+    slot.term.options.cursorStyle = style;
   }
 }
 

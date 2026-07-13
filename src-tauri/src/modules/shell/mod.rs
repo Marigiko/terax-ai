@@ -34,6 +34,58 @@ pub struct CommandOutput {
     pub truncated: bool,
 }
 
+/// Host aliases from ~/.ssh/config (top-level `Host` lines; wildcard and
+/// negated patterns are skipped — they aren't connectable names).
+#[tauri::command]
+pub fn ssh_list_hosts() -> Vec<String> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    let Ok(content) = std::fs::read_to_string(home.join(".ssh/config")) else {
+        return Vec::new();
+    };
+    let mut hosts: Vec<String> = Vec::new();
+    for line in content.lines() {
+        let line = line.trim();
+        let lower = line.to_ascii_lowercase();
+        if !lower.starts_with("host") {
+            continue;
+        }
+        let rest = line[4..].trim_start();
+        let rest = match rest.strip_prefix('=') {
+            Some(r) => r.trim_start(),
+            None if line[4..].starts_with([' ', '\t', '=']) => rest,
+            None => continue,
+        };
+        let mut patterns: Vec<String> = Vec::new();
+        let mut cur = String::new();
+        let mut in_quotes = false;
+        for ch in rest.chars() {
+            match ch {
+                '"' => in_quotes = !in_quotes,
+                c if c.is_whitespace() && !in_quotes => {
+                    if !cur.is_empty() {
+                        patterns.push(std::mem::take(&mut cur));
+                    }
+                }
+                c => cur.push(c),
+            }
+        }
+        if !cur.is_empty() {
+            patterns.push(cur);
+        }
+        for h in patterns {
+            if h.contains('*') || h.contains('?') || h.starts_with('!') || h.starts_with('-') {
+                continue;
+            }
+            if !hosts.iter().any(|e| e == &h) {
+                hosts.push(h);
+            }
+        }
+    }
+    hosts
+}
+
 /// Runs a one-shot command via the user's login shell. Output is capped and
 /// the process is force-killed on timeout. We deliberately do NOT pipe into
 /// the user's interactive PTY — that would fight their input. AI tool calls

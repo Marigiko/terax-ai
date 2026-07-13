@@ -182,6 +182,26 @@ fn settings_path(spec: &AgentSpec) -> Result<std::path::PathBuf, String> {
         .join(spec.file))
 }
 
+fn write_atomic(path: &std::path::Path, contents: &str) -> Result<(), String> {
+    use std::io::Write as _;
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = path.with_extension(format!("terax-tmp-{}-{seq}", std::process::id()));
+    let write = (|| -> std::io::Result<()> {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(contents.as_bytes())?;
+        f.sync_all()
+    })();
+    if let Err(e) = write {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("write {}: {e}", tmp.display()));
+    }
+    std::fs::rename(&tmp, path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("rename into {}: {e}", path.display())
+    })
+}
+
 #[tauri::command]
 pub fn agent_enable_hooks(agent: String) -> Result<(), String> {
     let spec = find(&agent)?;
@@ -195,18 +215,62 @@ pub fn agent_enable_hooks(agent: String) -> Result<(), String> {
         Err(e) => return Err(format!("read {}: {e}", path.display())),
     };
 
-    let merged = merge_hooks(existing, spec);
+    let merged = merge_hooks(existing.clone(), spec);
+    if merged == existing {
+        return Ok(());
+    }
     let out = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
+    write_atomic(&path, &out)
+}
 
-    // Write to a sibling temp file then rename so a crash mid-write can't leave
-    // a truncated config.
-    let tmp = path.with_extension("terax-tmp");
-    std::fs::write(&tmp, out).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, &path).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        format!("rename into {}: {e}", path.display())
-    })?;
-    Ok(())
+fn remove_hooks(mut root: Value, spec: &AgentSpec) -> Value {
+    {
+        let Some(obj) = root.as_object_mut() else {
+            return root;
+        };
+        let mut drop_hooks = false;
+        if let Some(hooks) = obj.get_mut("hooks").and_then(Value::as_object_mut) {
+            for (event, _) in spec.events {
+                let emptied_by_us =
+                    if let Some(arr) = hooks.get_mut(*event).and_then(Value::as_array_mut) {
+                        if arr.is_empty() {
+                            continue;
+                        }
+                        arr.retain(|g| !is_ours(g) && !is_empty_group(g));
+                        arr.is_empty()
+                    } else {
+                        false
+                    };
+                if emptied_by_us {
+                    hooks.remove(*event);
+                }
+            }
+            drop_hooks = hooks.is_empty();
+        }
+        if drop_hooks {
+            obj.remove("hooks");
+        }
+    }
+    root
+}
+
+#[tauri::command]
+pub fn agent_disable_hooks(agent: String) -> Result<(), String> {
+    let spec = find(&agent)?;
+    let path = settings_path(spec)?;
+
+    let existing = match std::fs::read_to_string(&path) {
+        Ok(s) => existing_config(Some(&s), &path)?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("read {}: {e}", path.display())),
+    };
+
+    let cleaned = remove_hooks(existing.clone(), spec);
+    if cleaned == existing {
+        return Ok(());
+    }
+    let out = serde_json::to_string_pretty(&cleaned).map_err(|e| e.to_string())?;
+    write_atomic(&path, &out)
 }
 
 // The raw OSC 777 bytes the detector parses. Kept in one place so the Windows

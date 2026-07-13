@@ -15,15 +15,19 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import type { ThemePref } from "@/modules/settings/store";
+import type { DiffViewMode, ThemePref } from "@/modules/settings/store";
 import {
   setAgentNotifications,
+  setAiBypassPermissions,
   setAutostart,
   setDefaultWorkspaceEnv,
+  setDiffViewMode,
   setExplorerGitDecorations,
   setRestoreWindowState,
+  setShowAgentsTab,
   setShowHidden,
   setTerminalCursorBlink,
+  setTerminalCursorStyle,
   setTerminalFontFamily,
   setTerminalFontSize,
   setTerminalFontWeight,
@@ -32,6 +36,7 @@ import {
   setTerminalShell,
   setTerminalWebglEnabled,
   setZoomLevel,
+  TERMINAL_CURSOR_STYLES,
   TERMINAL_FONT_SIZES,
   TERMINAL_SCROLLBACK_PRESETS,
 } from "@/modules/settings/store";
@@ -85,6 +90,7 @@ export function GeneralSection() {
     (s) => s.terminalWebglEnabled,
   );
   const terminalCursorBlink = usePreferencesStore((s) => s.terminalCursorBlink);
+  const terminalCursorStyle = usePreferencesStore((s) => s.terminalCursorStyle);
   const terminalFontFamily = usePreferencesStore((s) => s.terminalFontFamily);
   const terminalFontWeight = usePreferencesStore((s) => s.terminalFontWeight);
   const terminalShell = usePreferencesStore((s) => s.terminalShell);
@@ -98,6 +104,11 @@ export function GeneralSection() {
   const terminalScrollback = usePreferencesStore((s) => s.terminalScrollback);
   const zoomLevel = usePreferencesStore((s) => s.zoomLevel);
   const agentNotifications = usePreferencesStore((s) => s.agentNotifications);
+  const showAgentsTab = usePreferencesStore((s) => s.showAgentsTab);
+  const aiBypassPermissions = usePreferencesStore(
+    (s) => s.aiBypassPermissions,
+  );
+  const diffViewMode = usePreferencesStore((s) => s.diffViewMode);
 
   useEffect(() => {
     let alive = true;
@@ -210,6 +221,31 @@ export function GeneralSection() {
       </div>
 
       <div className="flex flex-col gap-2">
+        <Label>Editor</Label>
+        <SettingRow
+          title="Diff view"
+          description="How git diffs are laid out: inline in a single column, or side by side like VS Code."
+        >
+          <Select
+            value={diffViewMode}
+            onValueChange={(v) => void setDiffViewMode(v as DiffViewMode)}
+          >
+            <SelectTrigger className="h-8 w-36 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inline" className="text-[12px]">
+                Inline
+              </SelectItem>
+              <SelectItem value="split" className="text-[12px]">
+                Side by side
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      </div>
+
+      <div className="flex flex-col gap-2">
         <Label>Terminal</Label>
         <SettingRow
           title={
@@ -251,6 +287,26 @@ export function GeneralSection() {
             checked={terminalCursorBlink}
             onCheckedChange={(v) => void setTerminalCursorBlink(v)}
           />
+        </SettingRow>
+        <SettingRow
+          title="Cursor style"
+          description="Shape of the terminal cursor. Block fills the character cell; bar is a thin vertical line; underline sits below the character."
+        >
+          <Select
+            value={terminalCursorStyle}
+            onValueChange={(v) => void setTerminalCursorStyle(v as "bar" | "block" | "underline")}
+          >
+            <SelectTrigger size="sm" className="h-8 w-28 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TERMINAL_CURSOR_STYLES.map((s) => (
+                <SelectItem key={s.value} value={s.value} className="text-[12px]">
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </SettingRow>
         <FontFamilyInput
           value={terminalFontFamily}
@@ -436,6 +492,24 @@ export function GeneralSection() {
           <Switch
             checked={agentNotifications}
             onCheckedChange={(v) => void setAgentNotifications(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title="Bypass approvals (YOLO)"
+          description="Let the AI agent run edits and shell commands without per-action approval. Convenient but risky: the agent can modify files and run commands unprompted. Also toggleable from the AI bar."
+        >
+          <Switch
+            checked={aiBypassPermissions}
+            onCheckedChange={(v) => void setAiBypassPermissions(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title="Show Agents sidebar tab"
+          description="Display an Agents tab in the sidebar listing all active AI coding agents running in terminals."
+        >
+          <Switch
+            checked={showAgentsTab}
+            onCheckedChange={(v) => void setShowAgentsTab(v)}
           />
         </SettingRow>
       </div>

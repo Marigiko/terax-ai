@@ -23,6 +23,7 @@ import {
   acquireSlot,
   applyBackgroundActive,
   applyCursorBlink,
+  applyCursorStyle,
   applyFontFamily,
   applyFontSize,
   applyFontWeight,
@@ -158,16 +159,24 @@ export function writeToSession(leafId: number, data: string): boolean {
   return true;
 }
 
-export function submitToLeaf(leafId: number, text: string): void {
+export function submitToLeaf(leafId: number, text: string): boolean {
   const s = sessions.get(leafId);
-  if (!s || s.shellExited) return;
+  if (!s || s.shellExited) return false;
   s.everSubmitted = true;
-  // Bracketed paste keeps a multiline command atomic; trailing CR runs it.
   const data = text.includes("\n")
     ? `\x1b[200~${text}\x1b[201~\r`
     : `${text}\r`;
   if (s.pty) void s.pty.write(data);
   else queuePendingInput(s, data);
+  return true;
+}
+
+export function activeAgentForLeaf(_leafId: number): string | null {
+  return null;
+}
+
+export function subscribeTerminalAgentActivity(_cb: () => void): () => void {
+  return () => {};
 }
 
 export function interruptLeaf(leafId: number): void {
@@ -286,6 +295,19 @@ export function leafIdForPty(ptyId: number): number | null {
     if (s.pty?.id === ptyId) return leafId;
   }
   return null;
+}
+
+export type LivePtySession = {
+  leafId: number;
+  ptyId: number;
+};
+
+export function livePtySessions(): LivePtySession[] {
+  const live: LivePtySession[] = [];
+  for (const [leafId, s] of sessions) {
+    if (s.pty && !s.shellExited) live.push({ leafId, ptyId: s.pty.id });
+  }
+  return live;
 }
 
 function leafBusy(s: Session): boolean {
@@ -612,6 +634,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
             const set = blockViewportListeners.get(leafId);
             if (set) for (const l of set) l();
           },
+          sessionId: String(leafId),
         });
         s.blockDecorations = deco;
         const onGridFocus = () => {
@@ -906,6 +929,11 @@ export function useTerminalSession({
   useEffect(() => {
     applyCursorBlink(cursorBlink);
   }, [cursorBlink]);
+
+  const cursorStyle = usePreferencesStore((p) => p.terminalCursorStyle);
+  useEffect(() => {
+    applyCursorStyle(cursorStyle);
+  }, [cursorStyle]);
 
   const bgActive = usePreferencesStore(
     (p) => p.backgroundKind === "image" && !!p.backgroundImageId,

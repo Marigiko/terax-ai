@@ -1,6 +1,9 @@
 pub mod modules;
 
-use modules::{agent, fs, git, history, lsp, net, pty, secrets, shell, workspace};
+use modules::{
+    agent, claude_code, fs, gateway, git, history, lsp, net, proc, pty, secrets, serve, shell, voice,
+    workspace,
+};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "macos")]
@@ -155,6 +158,8 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .setup(|_app| {
+            voice::install_fn_monitor(_app.handle());
+
             // macOS skips parent() for the settings window, so tie its lifecycle
             // to the main window here instead. Other platforms keep parent().
             #[cfg(target_os = "macos")]
@@ -174,6 +179,7 @@ pub fn run() {
             Ok(())
         })
         .manage(pty::PtyState::default())
+        .manage(claude_code::ClaudeCodeState::default())
         .manage(shell::ShellState::default())
         .manage(secrets::SecretsState::default())
         .manage(fs::watch::FsWatchState::default())
@@ -242,10 +248,12 @@ pub fn run() {
             git::commands::git_remote_url,
             git::commands::git_list_branches,
             git::commands::git_checkout_branch,
+            git::commands::git_blame,
             shell::shell_run_command,
             shell::shell_session_open,
             shell::shell_session_run,
             shell::shell_session_close,
+            shell::ssh_list_hosts,
             shell::shell_bg_spawn,
             shell::shell_bg_logs,
             shell::shell_bg_kill,
@@ -258,7 +266,12 @@ pub fn run() {
             get_launch_dir,
             open_settings_window,
             agent::agent_enable_hooks,
+            agent::agent_disable_hooks,
+            claude_code::cli_agent_run,
+            claude_code::cli_agent_kill,
+            claude_code::cli_agent_available,
             agent::agent_hooks_status,
+            proc::proc_list_terminal_processes,
             secrets::secrets_get,
             secrets::secrets_set,
             secrets::secrets_delete,
@@ -266,10 +279,21 @@ pub fn run() {
             net::lm_ping,
             net::ai_http_request,
             net::ai_http_stream,
+            gateway::check_gateway_health,
+            gateway::gateway_default_url,
+            gateway::recall_memories,
+            gateway::remember_memory,
+            gateway::list_mcp_tools,
+            gateway::execute_mcp_tool,
+            serve::start_gateway,
+            serve::serve_web,
             history::history_suggest,
             history::history_commands,
             history::history_record,
             history::history_list,
+            history::history_list_full,
+            history::history_clear,
+            history::history_delete,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -278,6 +302,9 @@ pub fn run() {
             // on process exit; kill explicitly.
             if let tauri::RunEvent::Exit = event {
                 if let Some(state) = app.try_state::<lsp::LspState>() {
+                    state.kill_all();
+                }
+                if let Some(state) = app.try_state::<claude_code::ClaudeCodeState>() {
                     state.kill_all();
                 }
             }

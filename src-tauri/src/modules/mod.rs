@@ -1,5 +1,7 @@
 pub mod agent;
+pub mod claude_code;
 pub mod fs;
+pub mod gateway;
 pub mod git;
 pub mod history;
 pub mod lsp;
@@ -7,5 +9,7 @@ pub mod net;
 pub mod proc;
 pub mod pty;
 pub mod secrets;
+pub mod serve;
 pub mod shell;
+pub mod voice;
 pub mod workspace;

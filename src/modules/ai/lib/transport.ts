@@ -5,6 +5,7 @@ import type { ProviderKeys, CustomEndpointKeys } from "./keyring";
 import { formatAiError } from "./errors";
 import { native } from "./native";
 import type { ToolContext } from "../tools/tools";
+import { recall, formatMemoriesBlock } from "./memory";
 
 const TERAX_MD_MAX_BYTES = 32 * 1024;
 type MemoryCacheEntry = { content: string | null; mtime: number };
@@ -57,6 +58,8 @@ type Deps = {
   getOpenaiCompatibleModelId?: () => string | undefined;
   getOpenaiCompatibleContextLimit?: () => number | undefined;
   getOpenrouterModelId?: () => string | undefined;
+  getGatewayBaseURL?: () => string | undefined;
+  getGatewayAutoStart?: () => boolean;
   getCustomEndpoints?: () => readonly CustomEndpoint[];
   getCustomEndpointKeys?: () => CustomEndpointKeys;
   onStep?: (step: string | null) => void;
@@ -76,6 +79,26 @@ export function createContextAwareTransport(deps: Deps) {
   const run = async (options: SendOptions) => {
     const live = deps.getLive();
     const projectMemory = await readTeraxMd(live.workspaceRoot);
+
+    // Load gateway semantic memories (non-blocking — falls back gracefully)
+    let gatewayMemoryBlock = "";
+    const gatewayUrl = deps.getGatewayBaseURL?.();
+    if (gatewayUrl) {
+      try {
+        const query = extractUserQuery(options.messages);
+        if (query) {
+          const memories = await recall(query, "project", gatewayUrl);
+          gatewayMemoryBlock = formatMemoriesBlock(memories);
+        }
+      } catch {
+        // Gateway memory unavailable — continue without it
+      }
+    }
+
+    const combinedMemory = [projectMemory, gatewayMemoryBlock]
+      .filter(Boolean)
+      .join("\n\n");
+
     const envBlock = formatEnvBlock(live);
     const messagesForRun = envBlock
       ? injectEnvIntoLastUser(options.messages, envBlock)
@@ -103,7 +126,7 @@ export function createContextAwareTransport(deps: Deps) {
       customEndpoints: deps.getCustomEndpoints?.(),
       customEndpointKeys: deps.getCustomEndpointKeys?.(),
       planMode: deps.getPlanMode?.(),
-      projectMemory,
+      projectMemory: combinedMemory,
       uiMessages: messagesForRun,
       abortSignal: options.abortSignal,
     });
@@ -166,4 +189,19 @@ export const CONTEXT_BLOCK_RE =
 
 export function stripContextBlock(text: string): string {
   return text.replace(CONTEXT_BLOCK_RE, "");
+}
+
+function extractUserQuery(messages: UIMessage[]): string {
+  // Get the last user message text
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== "user") continue;
+    const parts = msg.parts as ReadonlyArray<{ type: string; text?: string }>;
+    for (const part of parts) {
+      if (part.type === "text" && part.text?.trim()) {
+        return part.text.trim().slice(0, 200);
+      }
+    }
+  }
+  return "";
 }

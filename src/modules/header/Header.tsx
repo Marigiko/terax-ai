@@ -41,6 +41,7 @@ type Props = {
   /** Move a dragged tab to a new position (insertion gap index). */
   onReorder: (fromId: number, toGapIndex: number) => void;
   onOverrideLanguage?: (id: number, lang: string | null) => void;
+  agentsByTabId?: Map<number, string>;
   onToggleSidebar: () => void;
   onOpenCommandPalette: () => void;
   onActivateAgent: (tabId: number, leafId: number) => void;
@@ -68,6 +69,7 @@ export function Header({
   onRename,
   onReorder,
   onOverrideLanguage,
+  agentsByTabId,
   onToggleSidebar,
   onOpenCommandPalette,
   onActivateAgent,
@@ -164,6 +166,7 @@ export function Header({
           onRename={onRename}
           onReorder={onReorder}
           onOverrideLanguage={onOverrideLanguage}
+          agentsByTabId={agentsByTabId}
           compact={compact}
         />
         <div data-tauri-drag-region className="h-full min-w-2 flex-1" />

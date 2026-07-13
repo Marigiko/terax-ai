@@ -67,6 +67,7 @@ export type EditorPaneHandle = {
   /** Open CodeMirror's find/replace panel. */
   openSearch: () => void;
   focus: () => void;
+  insertText: (text: string) => void;
   getSelection: () => string | null;
   getPath: () => string;
   /** Re-read the file from disk. Skips silently if the buffer is dirty. */
@@ -88,6 +89,7 @@ type Props = {
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
   onClose?: () => void;
+  onCursorChange?: (line: number, col: number) => void;
 };
 
 // Above this, syntax highlighting and LSP are disabled: a multi-MB lezer
@@ -104,7 +106,7 @@ function formatBytes(n: number): string {
 // skip re-rendering entirely when App re-renders (terminal events, tab churn).
 export const EditorPane = memo(
   forwardRef<EditorPaneHandle, Props>(function EditorPane(props, ref) {
-    const { path, overrideLanguage, onDirtyChange, onSaved, onClose } = props;
+    const { path, overrideLanguage, onDirtyChange, onSaved, onClose, onCursorChange } = props;
 
     const { doc, onChange, save, reload, adoptDiskText, openAnyway } =
       useDocument({
@@ -175,6 +177,8 @@ export const EditorPane = memo(
     onSavedRef.current = onSaved;
     const onCloseRef = useRef(onClose);
     onCloseRef.current = onClose;
+    const onCursorChangeRef = useRef(onCursorChange);
+    onCursorChangeRef.current = onCursorChange;
     const lspActiveRef = useRef(false);
     const warnedNoLspRef = useRef(false);
     const warnedNoFormatRef = useRef(false);
@@ -337,6 +341,14 @@ export const EditorPane = memo(
           },
           { key: "Ctrl-g", run: gotoLine },
         ]),
+        EditorView.updateListener.of((update) => {
+          if (!update.selectionSet) return;
+          const cb = onCursorChangeRef.current;
+          if (!cb) return;
+          const pos = update.state.selection.main.head;
+          const lineInfo = update.state.doc.lineAt(pos);
+          cb(lineInfo.number, pos - lineInfo.from + 1);
+        }),
       ],
       [],
     );
@@ -461,6 +473,17 @@ export const EditorPane = memo(
         },
         focus: () => {
           cmRef.current?.view?.focus();
+        },
+        insertText: (text: string) => {
+          const view = cmRef.current?.view;
+          if (!view) return;
+          const { from, to } = view.state.selection.main;
+          view.dispatch({
+            changes: { from, to, insert: text },
+            selection: { anchor: from + text.length },
+            scrollIntoView: true,
+          });
+          view.focus();
         },
         getSelection: () => {
           const view = cmRef.current?.view;

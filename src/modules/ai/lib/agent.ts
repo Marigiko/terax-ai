@@ -69,6 +69,7 @@ export type BuildModelOptions = {
   mlxBaseURL?: string;
   ollamaBaseURL?: string;
   openaiCompatibleBaseURL?: string;
+  gatewayBaseURL?: string;
 };
 
 const modelCache = new Map<string, LanguageModel>();
@@ -142,6 +143,15 @@ export async function buildLanguageModel(
       })(resolvedModelId);
       break;
     }
+    case "minimax": {
+      const { createAnthropic } = await import("@ai-sdk/anthropic");
+      built = createAnthropic({
+        apiKey: key,
+        baseURL: "https://api.minimax.io/anthropic/v1",
+      })(resolvedModelId);
+      break;
+    }
+    }
     case "groq": {
       const { createGroq } = await import("@ai-sdk/groq");
       built = createGroq({ apiKey: key })(resolvedModelId);
@@ -207,6 +217,17 @@ export async function buildLanguageModel(
       })(resolvedModelId);
       break;
     }
+    case "gateway": {
+      const { createOpenAICompatible } =
+        await import("@ai-sdk/openai-compatible");
+      const gatewayURL = options.gatewayBaseURL ?? "http://localhost:8000";
+      built = createOpenAICompatible({
+        name: "ai-workstation-gateway",
+        baseURL: `${gatewayURL.replace(/\/$/, "")}/v1`,
+        fetch: localProxyFetch,
+      })(resolvedModelId);
+      break;
+    }
     default: {
       const _exhaustive: never = provider;
       throw new Error(`Unsupported provider: ${_exhaustive as ProviderId}`);
@@ -226,6 +247,9 @@ export type LocalProviderConfig = {
   openaiCompatibleBaseURL?: string;
   openaiCompatibleModelId?: string;
   openrouterModelId?: string;
+  gatewayBaseURL?: string;
+  gatewayAutoStart?: boolean;
+  gatewayModelId?: string;
   customEndpoints?: readonly CustomEndpoint[];
   customEndpointKeys?: CustomEndpointKeys;
 };
@@ -289,12 +313,19 @@ export function buildConfiguredLanguageModel(
       );
     }
     resolvedId = local.openrouterModelId.trim();
+  } else if (m.provider === "gateway") {
+    if (m.id === "gateway-auto") {
+      resolvedId = local.gatewayModelId?.trim() ?? "claude-sonnet-4-20250514";
+    } else {
+      resolvedId = m.id.replace("gateway/", "");
+    }
   }
   return buildLanguageModel(m.provider, keys, resolvedId, {
     lmstudioBaseURL: local.lmstudioBaseURL,
     mlxBaseURL: local.mlxBaseURL,
     ollamaBaseURL: local.ollamaBaseURL,
     openaiCompatibleBaseURL: local.openaiCompatibleBaseURL,
+    gatewayBaseURL: local.gatewayBaseURL,
   });
 }
 

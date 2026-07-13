@@ -1,12 +1,16 @@
 export { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 export { TerminalStack } from "./TerminalStack";
 export {
+  activeAgentForLeaf,
   clearFocusedTerminal,
   disposeSession,
   leafHasForegroundProcess,
   leafIdForPty,
+  livePtySessions,
   navigateFocusedBlocks,
   respawnSession,
+  submitToLeaf,
+  subscribeTerminalAgentActivity,
   whenSessionReady,
   writeToSession,
 } from "./lib/useTerminalSession";

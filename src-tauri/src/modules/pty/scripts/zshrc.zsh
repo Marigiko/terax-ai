@@ -54,8 +54,7 @@ if [[ -z "$__TERAX_HOOKS_LOADED" ]]; then
       fi
       RPROMPT=''
     elif [[ "$PS1" != *$'\e]133;B\e\\'* ]]; then
-      # Re-inject prompt-end marker in case a framework rebuilt PS1 (p10k, starship).
-      PS1=$'%{\e]133;B\e\\%}'"$PS1"
+      PS1="$PS1"$'%{\e]133;B\e\\%}'
     fi
     printf '\e]133;A\e\\'
   }
