@@ -339,7 +339,7 @@ export const FileExplorer = memo(
           setIsSearchOpen(true);
           searchRef.current?.focus();
         },
-        refresh: () => tree.refresh(rootPath),
+        refresh: () => tree.refresh(rootPath ?? ""),
         createFile: () => {
           // Surface a prompt via the existing new-file event channel so the
           // host can wire a dialog without coupling the tree to UI state.

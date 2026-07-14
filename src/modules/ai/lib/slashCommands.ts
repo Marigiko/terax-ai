@@ -2,7 +2,7 @@ import {
   CheckListIcon,
   ClaudeIcon,
   SparklesIcon,
-  TerminalSquareIcon,
+  TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { usePlanStore } from "../store/planStore";
 import { executeGatewayTool } from "./mcp";
@@ -74,7 +74,7 @@ export const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
     name: "mcp",
     invocation: "/mcp",
     label: "Run Gateway Tool",
-    icon: TerminalSquareIcon,
+    icon: TerminalIcon,
   },
 };
 

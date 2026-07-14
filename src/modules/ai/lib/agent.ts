@@ -151,7 +151,6 @@ export async function buildLanguageModel(
       })(resolvedModelId);
       break;
     }
-    }
     case "groq": {
       const { createGroq } = await import("@ai-sdk/groq");
       built = createGroq({ apiKey: key })(resolvedModelId);

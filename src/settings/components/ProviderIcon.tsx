@@ -30,6 +30,8 @@ const ICON_BY_PROVIDER = {
   lmstudio: ComputerIcon,
   mlx: AppleIcon,
   ollama: ServerStack01Icon,
+  minimax: FlashIcon,
+  gateway: ServerStack01Icon,
 } as const satisfies Record<ProviderId, typeof ChatGptIcon>;
 
 type Props = {

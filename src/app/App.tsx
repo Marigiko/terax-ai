@@ -48,7 +48,6 @@ import { setLspNavigator } from "@/modules/lsp";
 import type { PreviewPaneHandle } from "@/modules/preview";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
-  setSidebarDisabled,
   setStatusBarDisabled,
 } from "@/modules/settings/store";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -771,7 +770,6 @@ export default function App() {
     (s) => s.explorerGitDecorations,
   );
   const gatewayBaseURL = usePreferencesStore((s) => s.gatewayBaseURL);
-  const commandDoneToasts = usePreferencesStore((s) => s.commandDoneToasts);
   const sidebarDisabled = usePreferencesStore((s) => s.sidebarDisabled);
   const statusBarDisabled = usePreferencesStore((s) => s.statusBarDisabled);
   const sshPaletteEnabled = usePreferencesStore((s) => s.sshPaletteEnabled);
@@ -935,11 +933,6 @@ export default function App() {
       activateAgentTarget,
     ],
   );
-
-  const toggleStatusBar = useCallback(() => {
-    const next = !usePreferencesStore.getState().statusBarDisabled;
-    void setStatusBarDisabled(next);
-  }, []);
 
   const shortcutsDisabled = useCallback(
     (id: ShortcutId, e: KeyboardEvent) => {
